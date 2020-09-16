@@ -436,6 +436,7 @@ class Session:
 
         query = ".".join(query.QUALNAME.split(".")[1:])
 
+        sleep_threshold = 0
         while True:
             try:
                 return await self._send(data, timeout=timeout)
