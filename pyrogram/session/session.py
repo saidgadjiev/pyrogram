@@ -445,7 +445,8 @@ class Session:
         sleep_threshold = 0
         while True:
             try:
-                flood_wait()
+                if isinstance(data, raw.functions.upload.GetFile):
+                    flood_wait()
                 return await self._send(data, timeout=timeout)
             except FloodWait as e:
                 amount = e.x
