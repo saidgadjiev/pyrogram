@@ -38,7 +38,7 @@ from pyrogram.crypto import aes
 from pyrogram.errors import (
     SessionPasswordNeeded,
     VolumeLocNotFound, ChannelPrivate,
-    AuthBytesInvalid, BadRequest
+    AuthBytesInvalid, BadRequest, FloodWait
 )
 from pyrogram.handlers.handler import Handler
 from pyrogram.methods import Methods
@@ -517,6 +517,8 @@ class Client(Methods, Scaffold):
                 final_file_path = os.path.abspath(re.sub("\\\\", "/", os.path.join(directory, file_name)))
                 os.makedirs(directory, exist_ok=True)
                 shutil.move(temp_file_path, final_file_path)
+        except FloodWait:
+            raise
         except Exception as e:
             log.error(e, exc_info=True)
 
@@ -931,7 +933,7 @@ class Client(Methods, Scaffold):
                     offset=offset,
                     limit=limit
                 ),
-                sleep_threshold=30
+                sleep_threshold=0
             )
 
             if isinstance(r, raw.types.upload.File):
@@ -1057,6 +1059,8 @@ class Client(Methods, Scaffold):
                                 break
                 except Exception as e:
                     raise e
+        except FloodWait:
+            raise
         except Exception as e:
             if not isinstance(e, pyrogram.StopTransmission):
                 log.error(e, exc_info=True)

@@ -43,12 +43,6 @@ class Result:
         self.event = asyncio.Event()
 
 
-def flood_wait():
-    e = FloodWait()
-    e.x = 10
-    raise e
-
-
 class Session:
     INITIAL_SALT = 0x616e67656c696361
     START_TIMEOUT = 1
@@ -442,11 +436,8 @@ class Session:
 
         query = ".".join(query.QUALNAME.split(".")[1:])
 
-        sleep_threshold = 0
         while True:
             try:
-                if isinstance(data, raw.functions.upload.GetFile):
-                    flood_wait()
                 return await self._send(data, timeout=timeout)
             except FloodWait as e:
                 amount = e.x
