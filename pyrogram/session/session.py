@@ -43,6 +43,12 @@ class Result:
         self.event = asyncio.Event()
 
 
+def flood_wait():
+    e = FloodWait()
+    e.x = 10
+    raise e
+
+
 class Session:
     INITIAL_SALT = 0x616e67656c696361
     START_TIMEOUT = 1
@@ -439,6 +445,7 @@ class Session:
         sleep_threshold = 0
         while True:
             try:
+                flood_wait()
                 return await self._send(data, timeout=timeout)
             except FloodWait as e:
                 amount = e.x
