@@ -439,7 +439,7 @@ class Session:
         while True:
             try:
                 if isinstance(data, raw.functions.upload.GetFile):
-                    e = FloodWait
+                    e = FloodWait()
                     e.x = 10
                     raise e
                 return await self._send(data, timeout=timeout)
