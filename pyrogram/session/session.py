@@ -440,10 +440,13 @@ class Session:
             try:
                 return await self._send(data, timeout=timeout)
             except FloodWait as e:
+                if sleep_threshold == 0:
+                    raise e
+
                 amount = e.x
 
                 if amount > sleep_threshold >= 0:
-                    raise
+                    raise e
 
                 log.warning(f'[{self.client.session_name}] Sleeping for {amount}s (required by "{query}")')
 
