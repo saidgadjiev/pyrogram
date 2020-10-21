@@ -1059,7 +1059,7 @@ class Client(Methods, Scaffold):
                                 break
                 except Exception as e:
                     raise e
-        except FloodWait:
+        except (FloodWait, TimeoutError):
             raise
         except Exception as e:
             if not isinstance(e, pyrogram.StopTransmission):
