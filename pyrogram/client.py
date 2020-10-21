@@ -971,7 +971,7 @@ class Client(Methods, Scaffold):
                                 offset=offset,
                                 limit=limit
                             ),
-                            sleep_threshold=30
+                            sleep_threshold=0
                         )
 
             elif isinstance(r, raw.types.upload.FileCdnRedirect):
