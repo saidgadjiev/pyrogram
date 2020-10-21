@@ -517,7 +517,7 @@ class Client(Methods, Scaffold):
                 final_file_path = os.path.abspath(re.sub("\\\\", "/", os.path.join(directory, file_name)))
                 os.makedirs(directory, exist_ok=True)
                 shutil.move(temp_file_path, final_file_path)
-        except FloodWait:
+        except (FloodWait, TimeoutError):
             raise
         except Exception as e:
             log.error(e, exc_info=True)
