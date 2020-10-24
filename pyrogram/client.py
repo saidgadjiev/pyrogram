@@ -925,6 +925,7 @@ class Client(Methods, Scaffold):
         limit = 1024 * 1024
         offset = 0
         file_name = ""
+        received_package_count = 0
 
         try:
             r = await session.send(
@@ -935,6 +936,7 @@ class Client(Methods, Scaffold):
                 ),
                 sleep_threshold=0
             )
+            received_package_count += 1
 
             if isinstance(r, raw.types.upload.File):
                 with tempfile.NamedTemporaryFile("wb", delete=False) as f:
@@ -965,6 +967,9 @@ class Client(Methods, Scaffold):
                             else:
                                 await self.loop.run_in_executor(self.executor, func)
 
+                        if received_package_count % 5:
+                            await asyncio.sleep(20)
+
                         r = await session.send(
                             raw.functions.upload.GetFile(
                                 location=location,
@@ -973,6 +978,7 @@ class Client(Methods, Scaffold):
                             ),
                             sleep_threshold=30
                         )
+                        received_package_count += 1
 
             elif isinstance(r, raw.types.upload.FileCdnRedirect):
                 async with self.media_sessions_lock:
