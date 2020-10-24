@@ -967,7 +967,7 @@ class Client(Methods, Scaffold):
                             else:
                                 await self.loop.run_in_executor(self.executor, func)
 
-                        if received_package_count % 5:
+                        if received_package_count % 5 == 0:
                             await asyncio.sleep(20)
 
                         r = await session.send(
