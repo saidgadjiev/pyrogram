@@ -18,7 +18,6 @@
 
 import asyncio
 import binascii
-import os
 import struct
 import time
 from datetime import datetime
@@ -28,8 +27,6 @@ from pyrogram import types
 from pyrogram import utils
 from pyrogram.errors import FileIdInvalid
 from pyrogram.scaffold import Scaffold
-
-DEFAULT_DOWNLOAD_DIR = "downloads/"
 
 
 class FileData:
@@ -62,7 +59,7 @@ class DownloadMedia(Scaffold):
         self,
         message: Union["types.Message", str],
         file_ref: str = None,
-        file_name: str = DEFAULT_DOWNLOAD_DIR,
+        file_name: str = None,
         block: bool = True,
         progress: callable = None,
         progress_args: tuple = ()
@@ -229,12 +226,6 @@ class DownloadMedia(Scaffold):
         except (AssertionError, binascii.Error, struct.error):
             raise FileIdInvalid from None
 
-        directory, file_name = os.path.split(file_name)
-        file_name = file_name or data.file_name or ""
-
-        if not os.path.isabs(file_name):
-            directory = self.PARENT_DIR / (directory or DEFAULT_DOWNLOAD_DIR)
-
         media_type_str = self.MEDIA_TYPE_ID[data.media_type]
 
         if not file_name:
@@ -262,7 +253,7 @@ class DownloadMedia(Scaffold):
                 extension
             )
 
-        downloader = self.handle_download((data, directory, file_name, progress, progress_args))
+        downloader = self.handle_download((data, file_name, progress, progress_args))
 
         if block:
             return await downloader

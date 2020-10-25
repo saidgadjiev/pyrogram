@@ -22,8 +22,6 @@ import inspect
 import logging
 import os
 import re
-import shutil
-import tempfile
 from concurrent.futures.thread import ThreadPoolExecutor
 from configparser import ConfigParser
 from hashlib import sha256
@@ -502,14 +500,12 @@ class Client(Methods, Scaffold):
         return is_min
 
     async def handle_download(self, packet):
-        temp_file_path = ""
-        final_file_path = ""
-
         try:
-            data, directory, file_name, progress, progress_args = packet
+            data, file_name, progress, progress_args = packet
 
-            temp_file_path = await self.get_file(
+            result_file_path = await self.get_file(
                 media_type=data.media_type,
+                file_name=file_name,
                 dc_id=data.dc_id,
                 document_id=data.document_id,
                 access_hash=data.access_hash,
@@ -525,22 +521,12 @@ class Client(Methods, Scaffold):
                 progress=progress,
                 progress_args=progress_args
             )
-
-            if temp_file_path:
-                final_file_path = os.path.abspath(re.sub("\\\\", "/", os.path.join(directory, file_name)))
-                os.makedirs(directory, exist_ok=True)
-                shutil.move(temp_file_path, final_file_path)
         except (FloodWait, TimeoutError):
             raise
         except Exception as e:
             log.error(e, exc_info=True)
-
-            try:
-                os.remove(temp_file_path)
-            except OSError:
-                pass
         else:
-            return final_file_path or None
+            return result_file_path or None
 
     async def handle_updates(self, updates):
         if isinstance(updates, (raw.types.Updates, raw.types.UpdatesCombined)):
@@ -833,6 +819,7 @@ class Client(Methods, Scaffold):
     async def get_file(
             self,
             media_type: int,
+            file_name: str,
             dc_id: int,
             document_id: int,
             access_hash: int,
@@ -951,50 +938,48 @@ class Client(Methods, Scaffold):
             received_batches_count += 1
 
             if isinstance(r, raw.types.upload.File):
-                with tempfile.NamedTemporaryFile("wb", delete=False) as f:
-                    file_name = f.name
+                f = open(file_name, 'wb')
+                while True:
+                    chunk = r.bytes
 
-                    while True:
-                        chunk = r.bytes
+                    if not chunk:
+                        break
 
-                        if not chunk:
-                            break
+                    f.write(chunk)
 
-                        f.write(chunk)
+                    offset += limit
 
-                        offset += limit
-
-                        if progress:
-                            func = functools.partial(
-                                progress,
-                                min(offset, file_size)
-                                if file_size != 0
-                                else offset,
-                                file_size,
-                                *progress_args
-                            )
-
-                            if inspect.iscoroutinefunction(progress):
-                                await func()
-                            else:
-                                await self.loop.run_in_executor(self.executor, func)
-
-                        if self.downloading_sleep_on_each_batches \
-                                and (received_batches_count % self.downloading_sleep_on_each_batches == 0):
-                            if self.after_batches_downloading_sleep_logging:
-                                print('Sleep ' + str(self.downloading_sleep_time_after_batches) +
-                                      ' after ' + str(self.downloading_sleep_on_each_batches))
-                            await asyncio.sleep(self.downloading_sleep_time_after_batches)
-
-                        r = await session.send(
-                            raw.functions.upload.GetFile(
-                                location=location,
-                                offset=offset,
-                                limit=limit
-                            ),
-                            sleep_threshold=30
+                    if progress:
+                        func = functools.partial(
+                            progress,
+                            min(offset, file_size)
+                            if file_size != 0
+                            else offset,
+                            file_size,
+                            *progress_args
                         )
-                        received_batches_count += 1
+
+                        if inspect.iscoroutinefunction(progress):
+                            await func()
+                        else:
+                            await self.loop.run_in_executor(self.executor, func)
+
+                    if self.downloading_sleep_on_each_batches \
+                            and (received_batches_count % self.downloading_sleep_on_each_batches == 0):
+                        if self.after_batches_downloading_sleep_logging:
+                            print('Sleep ' + str(self.downloading_sleep_time_after_batches) +
+                                  ' after ' + str(self.downloading_sleep_on_each_batches))
+                        await asyncio.sleep(self.downloading_sleep_time_after_batches)
+
+                    r = await session.send(
+                        raw.functions.upload.GetFile(
+                            location=location,
+                            offset=offset,
+                            limit=limit
+                        ),
+                        sleep_threshold=30
+                    )
+                    received_batches_count += 1
 
             elif isinstance(r, raw.types.upload.FileCdnRedirect):
                 async with self.media_sessions_lock:
@@ -1011,74 +996,72 @@ class Client(Methods, Scaffold):
                         self.media_sessions[r.dc_id] = cdn_session
 
                 try:
-                    with tempfile.NamedTemporaryFile("wb", delete=False) as f:
-                        file_name = f.name
-
-                        while True:
-                            r2 = await cdn_session.send(
-                                raw.functions.upload.GetCdnFile(
-                                    file_token=r.file_token,
-                                    offset=offset,
-                                    limit=limit
-                                )
+                    f = open(file_name, 'wb')
+                    while True:
+                        r2 = await cdn_session.send(
+                            raw.functions.upload.GetCdnFile(
+                                file_token=r.file_token,
+                                offset=offset,
+                                limit=limit
                             )
+                        )
 
-                            if isinstance(r2, raw.types.upload.CdnFileReuploadNeeded):
-                                try:
-                                    await session.send(
-                                        raw.functions.upload.ReuploadCdnFile(
-                                            file_token=r.file_token,
-                                            request_token=r2.request_token
-                                        )
+                        if isinstance(r2, raw.types.upload.CdnFileReuploadNeeded):
+                            try:
+                                await session.send(
+                                    raw.functions.upload.ReuploadCdnFile(
+                                        file_token=r.file_token,
+                                        request_token=r2.request_token
                                     )
-                                except VolumeLocNotFound:
-                                    break
-                                else:
-                                    continue
-
-                            chunk = r2.bytes
-
-                            # https://core.telegram.org/cdn#decrypting-files
-                            decrypted_chunk = aes.ctr256_decrypt(
-                                chunk,
-                                r.encryption_key,
-                                bytearray(
-                                    r.encryption_iv[:-4]
-                                    + (offset // 16).to_bytes(4, "big")
                                 )
-                            )
-
-                            hashes = await session.send(
-                                raw.functions.upload.GetCdnFileHashes(
-                                    file_token=r.file_token,
-                                    offset=offset
-                                )
-                            )
-
-                            # https://core.telegram.org/cdn#verifying-files
-                            for i, h in enumerate(hashes):
-                                cdn_chunk = decrypted_chunk[h.limit * i: h.limit * (i + 1)]
-                                assert h.hash == sha256(cdn_chunk).digest(), f"Invalid CDN hash part {i}"
-
-                            f.write(decrypted_chunk)
-
-                            offset += limit
-
-                            if progress:
-                                func = functools.partial(
-                                    progress,
-                                    min(offset, file_size) if file_size != 0 else offset,
-                                    file_size,
-                                    *progress_args
-                                )
-
-                                if inspect.iscoroutinefunction(progress):
-                                    await func()
-                                else:
-                                    await self.loop.run_in_executor(self.executor, func)
-
-                            if len(chunk) < limit:
+                            except VolumeLocNotFound:
                                 break
+                            else:
+                                continue
+
+                        chunk = r2.bytes
+
+                        # https://core.telegram.org/cdn#decrypting-files
+                        decrypted_chunk = aes.ctr256_decrypt(
+                            chunk,
+                            r.encryption_key,
+                            bytearray(
+                                r.encryption_iv[:-4]
+                                + (offset // 16).to_bytes(4, "big")
+                            )
+                        )
+
+                        hashes = await session.send(
+                            raw.functions.upload.GetCdnFileHashes(
+                                file_token=r.file_token,
+                                offset=offset
+                            )
+                        )
+
+                        # https://core.telegram.org/cdn#verifying-files
+                        for i, h in enumerate(hashes):
+                            cdn_chunk = decrypted_chunk[h.limit * i: h.limit * (i + 1)]
+                            assert h.hash == sha256(cdn_chunk).digest(), f"Invalid CDN hash part {i}"
+
+                        f.write(decrypted_chunk)
+
+                        offset += limit
+
+                        if progress:
+                            func = functools.partial(
+                                progress,
+                                min(offset, file_size) if file_size != 0 else offset,
+                                file_size,
+                                *progress_args
+                            )
+
+                            if inspect.iscoroutinefunction(progress):
+                                await func()
+                            else:
+                                await self.loop.run_in_executor(self.executor, func)
+
+                        if len(chunk) < limit:
+                            break
                 except Exception as e:
                     raise e
         except (FloodWait, TimeoutError):
