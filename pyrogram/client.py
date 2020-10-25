@@ -230,11 +230,16 @@ class Client(Methods, Scaffold):
 
         self.downloading_sleep_on_each_batches = int(os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES')) \
             if os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES') else None
+
         self.downloading_sleep_time_after_batches = int(os.environ.get('DOWNLOADING_SLEEP_TIME_AFTER_BATCHES', '10'))
+
+        self.after_batches_downloading_sleep_logging = os.environ.get('AFTER_BATCHES_DOWNLOADING_SLEEP_LOGGING',
+                                                                      'False') == 'True'
 
         if self.downloading_sleep_on_each_batches:
             print('Sleep ' + str(self.downloading_sleep_time_after_batches) + ' after download '
-                  + str(self.downloading_sleep_on_each_batches))
+                  + str(self.downloading_sleep_on_each_batches)
+                  + ' logging enabled ' + str(self.after_batches_downloading_sleep_logging))
 
         self.executor = ThreadPoolExecutor(self.workers, thread_name_prefix="Handler")
 
@@ -976,6 +981,9 @@ class Client(Methods, Scaffold):
 
                         if self.downloading_sleep_on_each_batches \
                                 and (received_batches_count % self.downloading_sleep_on_each_batches == 0):
+                            if self.after_batches_downloading_sleep_logging:
+                                print('Sleep ' + str(self.downloading_sleep_time_after_batches) +
+                                      ' after ' + str(self.downloading_sleep_on_each_batches))
                             await asyncio.sleep(self.downloading_sleep_time_after_batches)
 
                         r = await session.send(
