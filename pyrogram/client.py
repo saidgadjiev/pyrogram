@@ -232,6 +232,10 @@ class Client(Methods, Scaffold):
             if os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES') else None
         self.downloading_sleep_time_after_batches = int(os.environ.get('DOWNLOADING_SLEEP_TIME_AFTER_BATCHES', '10'))
 
+        if self.downloading_sleep_on_each_batches:
+            print('Sleep ' + str(self.downloading_sleep_time_after_batches) + ' after download '
+                  + str(self.downloading_sleep_on_each_batches))
+
         self.executor = ThreadPoolExecutor(self.workers, thread_name_prefix="Handler")
 
         if isinstance(session_name, str):
