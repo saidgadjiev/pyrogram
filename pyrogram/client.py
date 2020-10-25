@@ -174,31 +174,31 @@ class Client(Methods, Scaffold):
     """
 
     def __init__(
-        self,
-        session_name: Union[str, Storage],
-        api_id: Union[int, str] = None,
-        api_hash: str = None,
-        app_version: str = None,
-        device_model: str = None,
-        system_version: str = None,
-        lang_code: str = None,
-        ipv6: bool = False,
-        proxy: dict = None,
-        test_mode: bool = False,
-        bot_token: str = None,
-        phone_number: str = None,
-        phone_code: str = None,
-        password: str = None,
-        force_sms: bool = False,
-        workers: int = Scaffold.WORKERS,
-        workdir: str = Scaffold.WORKDIR,
-        config_file: str = Scaffold.CONFIG_FILE,
-        plugins: dict = None,
-        parse_mode: str = Scaffold.PARSE_MODES[0],
-        no_updates: bool = None,
-        takeout: bool = None,
-        sleep_threshold: int = Session.SLEEP_THRESHOLD,
-        hide_password: bool = False
+            self,
+            session_name: Union[str, Storage],
+            api_id: Union[int, str] = None,
+            api_hash: str = None,
+            app_version: str = None,
+            device_model: str = None,
+            system_version: str = None,
+            lang_code: str = None,
+            ipv6: bool = False,
+            proxy: dict = None,
+            test_mode: bool = False,
+            bot_token: str = None,
+            phone_number: str = None,
+            phone_code: str = None,
+            password: str = None,
+            force_sms: bool = False,
+            workers: int = Scaffold.WORKERS,
+            workdir: str = Scaffold.WORKDIR,
+            config_file: str = Scaffold.CONFIG_FILE,
+            plugins: dict = None,
+            parse_mode: str = Scaffold.PARSE_MODES[0],
+            no_updates: bool = None,
+            takeout: bool = None,
+            sleep_threshold: int = Session.SLEEP_THRESHOLD,
+            hide_password: bool = False
     ):
         super().__init__()
 
@@ -227,6 +227,10 @@ class Client(Methods, Scaffold):
         self.takeout = takeout
         self.sleep_threshold = sleep_threshold
         self.hide_password = hide_password
+
+        self.downloading_sleep_on_each_batches = int(os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES')) \
+            if os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES') else None
+        self.downloading_sleep_time_after_batches = int(os.environ.get('DOWNLOADING_SLEEP_TIME_AFTER_BATCHES', '10'))
 
         self.executor = ThreadPoolExecutor(self.workers, thread_name_prefix="Handler")
 
@@ -818,22 +822,22 @@ class Client(Methods, Scaffold):
                 log.warning(f'[{self.session_name}] No plugin loaded from "{root}"')
 
     async def get_file(
-        self,
-        media_type: int,
-        dc_id: int,
-        document_id: int,
-        access_hash: int,
-        thumb_size: str,
-        peer_id: int,
-        peer_type: str,
-        peer_access_hash: int,
-        volume_id: int,
-        local_id: int,
-        file_ref: str,
-        file_size: int,
-        is_big: bool,
-        progress: callable,
-        progress_args: tuple = ()
+            self,
+            media_type: int,
+            dc_id: int,
+            document_id: int,
+            access_hash: int,
+            thumb_size: str,
+            peer_id: int,
+            peer_type: str,
+            peer_access_hash: int,
+            volume_id: int,
+            local_id: int,
+            file_ref: str,
+            file_size: int,
+            is_big: bool,
+            progress: callable,
+            progress_args: tuple = ()
     ) -> str:
         async with self.media_sessions_lock:
             session = self.media_sessions.get(dc_id, None)
@@ -925,8 +929,7 @@ class Client(Methods, Scaffold):
         limit = 1024 * 1024
         offset = 0
         file_name = ""
-        received_package_count = 0
-
+        received_batches_count = 0
         try:
             r = await session.send(
                 raw.functions.upload.GetFile(
@@ -936,7 +939,7 @@ class Client(Methods, Scaffold):
                 ),
                 sleep_threshold=0
             )
-            received_package_count += 1
+            received_batches_count += 1
 
             if isinstance(r, raw.types.upload.File):
                 with tempfile.NamedTemporaryFile("wb", delete=False) as f:
@@ -967,8 +970,9 @@ class Client(Methods, Scaffold):
                             else:
                                 await self.loop.run_in_executor(self.executor, func)
 
-                        if received_package_count % 5 == 0:
-                            await asyncio.sleep(20)
+                        if self.downloading_sleep_on_each_batches \
+                                and (received_batches_count % self.downloading_sleep_on_each_batches == 0):
+                            await asyncio.sleep(self.downloading_sleep_time_after_batches)
 
                         r = await session.send(
                             raw.functions.upload.GetFile(
@@ -978,7 +982,7 @@ class Client(Methods, Scaffold):
                             ),
                             sleep_threshold=30
                         )
-                        received_package_count += 1
+                        received_batches_count += 1
 
             elif isinstance(r, raw.types.upload.FileCdnRedirect):
                 async with self.media_sessions_lock:
