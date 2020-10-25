@@ -924,7 +924,6 @@ class Client(Methods, Scaffold):
 
         limit = 1024 * 1024
         offset = 0
-        file_name = ""
         received_batches_count = 0
         try:
             r = await session.send(
