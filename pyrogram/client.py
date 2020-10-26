@@ -225,7 +225,10 @@ class Client(Methods, Scaffold):
         self.takeout = takeout
         self.sleep_threshold = sleep_threshold
         self.hide_password = hide_password
+        self.downloading_batch_size = int(os.environ.get('DOWNLOADING_BATCH_SIZE')) \
+            if os.environ.get('DOWNLOADING_BATCH_SIZE') else 1024 * 1024
 
+        print('Downloading batch size ' + str(self.downloading_batch_size))
         self.downloading_sleep_on_each_batches = int(os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES')) \
             if os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES') else None
 
@@ -922,7 +925,7 @@ class Client(Methods, Scaffold):
                 thumb_size=""
             )
 
-        limit = 1024 * 1024
+        limit = self.downloading_batch_size
         offset = 0
         received_batches_count = 0
         try:
