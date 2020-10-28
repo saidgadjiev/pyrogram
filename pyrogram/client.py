@@ -232,7 +232,7 @@ class Client(Methods, Scaffold):
         self.downloading_sleep_on_each_batches = int(os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES')) \
             if os.environ.get('DOWNLOADING_SLEEP_EACH_BATCHES') else None
 
-        self.downloading_sleep_time_after_batches = int(os.environ.get('DOWNLOADING_SLEEP_TIME_AFTER_BATCHES', '10'))
+        self.downloading_sleep_time_after_batches = float(os.environ.get('DOWNLOADING_SLEEP_TIME_AFTER_BATCHES', '10'))
 
         self.after_batches_downloading_sleep_logging = os.environ.get('AFTER_BATCHES_DOWNLOADING_SLEEP_LOGGING',
                                                                       'False') == 'True'
